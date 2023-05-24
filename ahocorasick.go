@@ -141,7 +141,7 @@ func (ac AhoCorasick) PatternCount() int {
 
 // Iter gives an iterator over the built patterns
 func (ac AhoCorasick) Iter(haystack string) Iter {
-	return ac.IterByte([]byte(haystack))
+	return ac.IterByte(unsafeBytes(haystack))
 }
 
 // IterByte gives an iterator over the built patterns
@@ -152,7 +152,7 @@ func (ac AhoCorasick) IterByte(haystack []byte) Iter {
 
 // Iter gives an iterator over the built patterns with overlapping matches
 func (ac AhoCorasick) IterOverlapping(haystack string) Iter {
-	return ac.IterOverlappingByte([]byte(haystack))
+	return ac.IterOverlappingByte(unsafeBytes(haystack))
 }
 
 // IterOverlappingByte gives an iterator over the built patterns with overlapping matches
@@ -281,7 +281,7 @@ type Finder interface {
 
 // FindAll returns the matches found in the haystack
 func (ac AhoCorasick) FindAll(haystack string) []Match {
-	iter := newFindIter(ac, []byte(haystack))
+	iter := newFindIter(ac, unsafeBytes(haystack))
 
 	var matches []Match
 	for {
@@ -326,7 +326,7 @@ func NewAhoCorasickBuilder(o Opts) AhoCorasickBuilder {
 func (a *AhoCorasickBuilder) Build(patterns []string) AhoCorasick {
 	bytePatterns := make([][]byte, len(patterns))
 	for pati, pat := range patterns {
-		bytePatterns[pati] = []byte(pat)
+		bytePatterns[pati] = unsafeBytes(pat)
 	}
 
 	return a.BuildByte(bytePatterns)
