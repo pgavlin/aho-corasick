@@ -212,6 +212,27 @@ func (r Replacer) ReplaceAll(haystack string, replaceWith []string) string {
 	)
 }
 
+// ReplaceAllWith replaces the matches found in the haystack according with replacement.
+func (r Replacer) ReplaceAllWith(haystack, replacement string) string {
+	return r.replaceAll(
+		haystack,
+		func(matches []Match) int {
+			size, start := 0, 0
+			for _, m := range matches {
+				size += m.Start() - start + len(replacement)
+				start = m.Start() + m.len
+			}
+			if start-1 < len(haystack) {
+				size += len(haystack[start:])
+			}
+			return size
+		},
+		func(match Match) (string, bool) {
+			return replacement, true
+		},
+	)
+}
+
 func (r Replacer) replaceAll(haystack string, measure func(matches []Match) int, f func(match Match) (string, bool)) string {
 	matches := r.finder.FindAll(haystack)
 	if len(matches) == 0 {
