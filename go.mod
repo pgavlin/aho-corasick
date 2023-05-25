@@ -1,3 +1,3 @@
-module github.com/petar-dambovaliev/aho-corasick
+module github.com/pgavlin/aho-corasick
 
-go 1.15
+go 1.18

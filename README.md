@@ -1,21 +1,22 @@
 # aho-corasick
+
 Efficient string matching in Golang via the aho-corasick algorithm.
 
 x20 faster than https://github.com/cloudflare/ahocorasick and x3 faster than https://github.com/anknown/ahocorasick
 
 Memory consuption is a eigth of https://github.com/cloudflare/ahocorasick and half of https://github.com/anknown/ahocorasick
 
-This library is heavily inspired by https://github.com/BurntSushi/aho-corasick
+This library is forked from https://github.com/petar-dambovaliev/aho-corasick, which was heavily inspired by https://github.com/BurntSushi/aho-corasick.
 
 ## Usage
 
 ```bash
-go get -u github.com/petar-dambovaliev/aho-corasick
+go get -u github.com/pgavlin/aho-corasick
 ```
 
 ```go
 import (
-    ahocorasick "github.com/petar-dambovaliev/aho-corasick"
+    ahocorasick "github.com/pgavlin/aho-corasick"
 )
 builder := ahocorasick.NewAhoCorasickBuilder(Opts{
     AsciiCaseInsensitive: true,
