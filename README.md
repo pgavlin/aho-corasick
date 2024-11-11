@@ -4,7 +4,7 @@ Efficient string matching in Golang via the aho-corasick algorithm.
 
 x20 faster than https://github.com/cloudflare/ahocorasick and x3 faster than https://github.com/anknown/ahocorasick
 
-Memory consuption is a eigth of https://github.com/cloudflare/ahocorasick and half of https://github.com/anknown/ahocorasick
+Memory consumption is an eighth of https://github.com/cloudflare/ahocorasick and half of https://github.com/anknown/ahocorasick
 
 This library is forked from https://github.com/petar-dambovaliev/aho-corasick, which was heavily inspired by https://github.com/BurntSushi/aho-corasick.
 
@@ -15,23 +15,33 @@ go get -u github.com/pgavlin/aho-corasick
 ```
 
 ```go
+package main
+
 import (
-    ahocorasick "github.com/pgavlin/aho-corasick"
+	"fmt"
+	ahocorasick "github.com/pgavlin/aho-corasick"
 )
-builder := ahocorasick.NewAhoCorasickBuilder(Opts{
-    AsciiCaseInsensitive: true,
-    MatchOnlyWholeWords:  true,
-    MatchKind:            LeftMostLongestMatch,
-    DFA:                  true,
-})
 
-ac := builder.Build([]string{"bear", "masha"})
-haystack := "The Bear and Masha"
-matches := ac.FindAll(haystack)
+func main() {
 
-for _, match := range matches {
-    println(haystack[match.Start():match.End()])
+	builder := ahocorasick.NewAhoCorasickBuilder(ahocorasick.Opts{
+		AsciiCaseInsensitive: true,
+		MatchOnlyWholeWords:  true,
+		MatchKind:            ahocorasick.LeftMostLongestMatch,
+		DFA:                  true,
+	})
+
+	ac := builder.Build([]string{"bear", "masha"})
+	haystack := "The Bear and Masha"
+	matches := ac.FindAll(haystack)
+
+	for _, match := range matches {
+		fmt.Println(match.Start())
+		fmt.Println(match.End())
+		fmt.Println(haystack[match.Start():match.End()])
+	}
 }
+
 ```
 
 Matching can be done via `NFA` or `DFA`.
