@@ -5,8 +5,16 @@ import (
 	"unsafe"
 )
 
-func unsafeBytes(s string) []byte {
-	str := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	slice := reflect.SliceHeader{Data: str.Data, Len: str.Len, Cap: str.Len}
-	return *(*[]byte)(unsafe.Pointer(&slice))
+func unsafeBytes[T Text](s T) []byte {
+	if reflect.TypeFor[T]().Kind() == reflect.String {
+		return unsafe.Slice(unsafe.StringData(string(s)), len(s))
+	}
+	return []byte(s)
+}
+
+func unsafeText[T Text](s []byte) T {
+	if reflect.TypeFor[T]().Kind() == reflect.String {
+		return T(unsafe.String(unsafe.SliceData(s), len(s)))
+	}
+	return T(s)
 }

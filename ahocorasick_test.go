@@ -49,20 +49,20 @@ func BenchmarkStdlib_AhoCorasickReplaceAll(b *testing.B) {
 	for _, t2 := range benchmarkStdlibCases {
 		b.Run(t2.name, func(b *testing.B) {
 			builder := NewAhoCorasickBuilder(Opts{MatchKind: LeftMostLongestMatch})
-			replacer := NewReplacer(builder.Build(t2.patterns))
+			ac := builder.Build(t2.patterns)
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_ = replacer.ReplaceAll(t2.haystack, t2.replaceWith)
+				_ = ReplaceAll(ac, t2.haystack, t2.replaceWith)
 			}
 		})
 	}
 }
 
-var benchmarkReplacerDFA []Replacer
+var benchmarkReplacerDFA []AhoCorasick
 
 func init() {
-	benchmarkReplacerDFA = make([]Replacer, len(testCasesReplace))
+	benchmarkReplacerDFA = make([]AhoCorasick, len(testCasesReplace))
 	for i, t2 := range testCasesReplace {
 		builder := NewAhoCorasickBuilder(Opts{
 			AsciiCaseInsensitive: true,
@@ -70,8 +70,7 @@ func init() {
 			MatchKind:            LeftMostLongestMatch,
 			DFA:                  true,
 		})
-		ac := builder.Build(t2.patterns)
-		benchmarkReplacerDFA[i] = NewReplacer(ac)
+		benchmarkReplacerDFA[i] = builder.Build(t2.patterns)
 	}
 }
 
@@ -85,7 +84,7 @@ func TestOverlappingPatterns1(t *testing.T) {
 	patterns := []string{"the foot", "football"}
 
 	trie := trieBuilder.Build(patterns)
-	result := trie.FindAll("the football")
+	result := FindAll(trie, "the football")
 	if len(result) != 1 {
 		t.Logf("%v", result)
 		t.Error("Did not find match in string")
@@ -103,7 +102,7 @@ func TestOverlappingPatterns2(t *testing.T) {
 	patterns := []string{"test _test_", "_test_1"}
 
 	trie := trieBuilder.Build(patterns)
-	result := trie.FindAll("test _test_1")
+	result := FindAll(trie, "test _test_1")
 	if len(result) != 1 {
 		t.Logf("%v", result)
 		t.Error("Did not find match in string")
@@ -121,7 +120,7 @@ func TestOverlappingPatterns3(t *testing.T) {
 	patterns := []string{"test _test_", "_test_1"}
 
 	trie := trieBuilder.Build(patterns)
-	result := trie.FindAll("test _test_1")
+	result := FindAll(trie, "test _test_1")
 	if len(result) != 2 {
 		t.Logf("%v", result)
 		t.Error("Did not find match in string")
@@ -132,7 +131,7 @@ func TestOverlappingPatterns3(t *testing.T) {
 func BenchmarkAhoCorasick_ReplaceAllDFA(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for i, ac := range benchmarkReplacerDFA {
-			_ = ac.ReplaceAll(testCasesReplace[i].haystack, testCasesReplace[i].replaceWith)
+			_ = ReplaceAll(ac, testCasesReplace[i].haystack, testCasesReplace[i].replaceWith)
 		}
 	}
 }
@@ -147,9 +146,8 @@ func TestAhoCorasick_ReplaceAllFuncStopN(t *testing.T) {
 		})
 
 		ac := builder.Build(i2.patterns)
-		r := NewReplacer(ac)
 		i := -1
-		replaced := r.ReplaceAllFunc(i2.haystack, func(match Match) (string, bool) {
+		replaced := ReplaceAllFunc(ac, i2.haystack, func(match Match) (string, bool) {
 			i += 1
 			return i2.replaceWith[match.pattern], i2.stopAt != i
 		})
@@ -207,8 +205,7 @@ func TestAhoCorasick_ReplaceAll(t *testing.T) {
 		})
 
 		ac := builder.Build(i2.patterns)
-		r := NewReplacer(ac)
-		replaced := r.ReplaceAll(i2.haystack, i2.replaceWith)
+		replaced := ReplaceAll(ac, i2.haystack, i2.replaceWith)
 		if replaced != i2.replaced {
 			t.Errorf("expected %v matches got %v", i2.replaced, replaced)
 		}
@@ -224,8 +221,7 @@ func TestAhoCorasick_ReplaceAllFunc(t *testing.T) {
 		})
 
 		ac := builder.Build(i2.patterns)
-		r := NewReplacer(ac)
-		replaced := r.ReplaceAllFunc(i2.haystack, func(match Match) (string, bool) {
+		replaced := ReplaceAllFunc(ac, i2.haystack, func(match Match) (string, bool) {
 			return i2.replaceWith[match.pattern], true
 		})
 		if replaced != i2.replaced {
@@ -243,33 +239,31 @@ func TestAhoCorasick_ReplaceAllWith(t *testing.T) {
 		})
 
 		ac := builder.Build(i2.patterns)
-		r := NewReplacer(ac)
-		replaced := r.ReplaceAllWith(i2.haystack, i2.replaceWith)
+		replaced := ReplaceAllWith(ac, i2.haystack, i2.replaceWith)
 		if replaced != i2.replaced {
 			t.Errorf("expected %v matches got %v", i2.replaced, replaced)
 		}
 	}
 }
 
-var acsNFA []Replacer
+var acsNFA []AhoCorasick
 
 func init() {
-	acsNFA = make([]Replacer, len(testCasesReplace))
+	acsNFA = make([]AhoCorasick, len(testCasesReplace))
 	for i, t2 := range testCasesReplace {
 		builder := NewAhoCorasickBuilder(Opts{
 			AsciiCaseInsensitive: true,
 			MatchOnlyWholeWords:  true,
 			MatchKind:            LeftMostLongestMatch,
 		})
-		ac := builder.Build(t2.patterns)
-		acsNFA[i] = NewReplacer(ac)
+		acsNFA[i] = builder.Build(t2.patterns)
 	}
 }
 
 func BenchmarkAhoCorasick_ReplaceAllNFA(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for i, ac := range acsNFA {
-			_ = ac.ReplaceAll(testCasesReplace[i].haystack, testCasesReplace[i].replaceWith)
+			_ = ReplaceAll(ac, testCasesReplace[i].haystack, testCasesReplace[i].replaceWith)
 		}
 	}
 }
@@ -351,11 +345,10 @@ func TestAhoCorasick_Iter(t *testing.T) {
 		})
 
 		ac := builder.Build(t2.patterns)
-		iter := ac.Iter(t2.haystack)
 		matches := make([]Match, 0)
 
-		for next := iter.Next(); next != nil; next = iter.Next() {
-			matches = append(matches, *next)
+		for m := range Iter(ac, t2.haystack) {
+			matches = append(matches, *m)
 		}
 
 		if len(matches) != len(t2.matches) {
@@ -384,7 +377,7 @@ func TestAhoCorasick_Parallel(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		go func() {
 			ac := ac
-			matches := ac.FindAll(t2.haystack)
+			matches := FindAll(ac, t2.haystack)
 			if len(matches) != len(t2.matches) {
 				t.Errorf("test %v expected %v matches got %v", 0, len(matches), len(t2.matches))
 			}
@@ -408,10 +401,9 @@ func TestAhoCorasick_IterOverlapping(t *testing.T) {
 
 	ac := builder.Build([]string{"hinweise und Vorsichtsmaßnahmen", "Vorsichtsmaßnahmen"})
 	haystack := "alle spezifischen Warnhinweise und Vorsichtsmaßnahmen, die mit einem"
-	iter := ac.IterOverlapping(haystack)
 
 	matches := make([]Match, 0)
-	for next := iter.Next(); next != nil; next = iter.Next() {
+	for next := range IterOverlapping(ac, haystack) {
 		matches = append(matches, *next)
 	}
 	if len(matches) != 1 {
@@ -437,7 +429,7 @@ func TestAhoCorasick_LeftmostInsensitiveWholeWord(t *testing.T) {
 
 		for _, builder := range builders {
 			ac := builder.Build(t2.patterns)
-			matches := ac.FindAll(t2.haystack)
+			matches := FindAll(ac, t2.haystack)
 
 			if len(matches) != len(t2.matches) {
 				t.Errorf("test %v expected %v matches got %v", i, len(matches), len(t2.matches))
@@ -524,7 +516,7 @@ func BenchmarkAhoCorasick_LeftmostInsensitiveWholeWord(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for i, ac := range acs {
-			_ = ac.FindAll(leftmostInsensitiveWholeWordTestCases[i].haystack)
+			_ = FindAll(ac, leftmostInsensitiveWholeWordTestCases[i].haystack)
 		}
 	}
 }

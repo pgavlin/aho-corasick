@@ -1,10 +1,15 @@
 package aho_corasick
 
 import (
-	"strings"
+	"bytes"
+	"iter"
 	"sync"
 	"unicode"
 )
+
+type Text interface {
+	~[]byte | ~string
+}
 
 type findIter struct {
 	fsm                 imp
@@ -30,12 +35,6 @@ func newFindIter(ac AhoCorasick, haystack []byte) findIter {
 		pos:                 0,
 		matchOnlyWholeWords: ac.matchOnlyWholeWords,
 	}
-}
-
-// Iter is an iterator over matches found on the current haystack
-// it gives the user more granular control. You can chose how many and what kind of matches you need.
-type Iter interface {
-	Next() *Match
 }
 
 // Next gives a pointer to the next match yielded by the iterator or nil, if there is none
@@ -121,9 +120,6 @@ func newOverlappingIter(ac AhoCorasick, haystack []byte) overlappingIter {
 	}
 }
 
-// make sure the AhoCorasick data structure implements the Finder interface
-var _ Finder = (*AhoCorasick)(nil)
-
 // AhoCorasick is the main data structure that does most of the work
 type AhoCorasick struct {
 	i                   imp
@@ -136,147 +132,34 @@ func (ac AhoCorasick) PatternCount() int {
 }
 
 // Iter gives an iterator over the built patterns
-func (ac AhoCorasick) Iter(haystack string) Iter {
-	return ac.IterByte(unsafeBytes(haystack))
+func Iter[T Text](ac AhoCorasick, haystack T) iter.Seq[*Match] {
+	i := newFindIter(ac, unsafeBytes(haystack))
+	return func(yield func(*Match) bool) {
+		for m := i.Next(); m != nil; m = i.Next() {
+			if !yield(m) {
+				break
+			}
+		}
+	}
 }
 
-// IterByte gives an iterator over the built patterns
-func (ac AhoCorasick) IterByte(haystack []byte) Iter {
-	iter := newFindIter(ac, haystack)
-	return &iter
-}
-
-// Iter gives an iterator over the built patterns with overlapping matches
-func (ac AhoCorasick) IterOverlapping(haystack string) Iter {
-	return ac.IterOverlappingByte(unsafeBytes(haystack))
-}
-
-// IterOverlappingByte gives an iterator over the built patterns with overlapping matches
-func (ac AhoCorasick) IterOverlappingByte(haystack []byte) Iter {
+// IterOverlapping gives an iterator over the built patterns with overlapping matches
+func IterOverlapping[T Text](ac AhoCorasick, haystack T) iter.Seq[*Match] {
 	if ac.matchKind != StandardMatch {
 		panic("only StandardMatch allowed for overlapping matches")
 	}
-	i := newOverlappingIter(ac, haystack)
-	return &i
-}
-
-var pool = sync.Pool{
-	New: func() interface{} {
-		return strings.Builder{}
-	},
-}
-
-type Replacer struct {
-	finder Finder
-}
-
-func NewReplacer(finder Finder) Replacer {
-	return Replacer{finder: finder}
-}
-
-// ReplaceAllFunc replaces the matches found in the haystack according to the user provided function
-// it gives fine grained control over what is replaced.
-// A user can chose to stop the replacing process early by returning false in the lambda
-// In that case, everything from that point will be kept as the original haystack
-func (r Replacer) ReplaceAllFunc(haystack string, f func(match Match) (string, bool)) string {
-	return r.replaceAll(haystack, func(_ []Match) int { return -1 }, f)
-}
-
-// ReplaceAll replaces the matches found in the haystack according to the user provided slice `replaceWith`
-// It panics, if `replaceWith` has length different from the patterns that it was built with
-func (r Replacer) ReplaceAll(haystack string, replaceWith []string) string {
-	if len(replaceWith) != r.finder.PatternCount() {
-		panic("replaceWith needs to have the same length as the pattern count")
-	}
-
-	return r.replaceAll(
-		haystack,
-		func(matches []Match) int {
-			size, start := 0, 0
-			for _, m := range matches {
-				size += m.Start() - start + len(replaceWith[m.pattern])
-				start = m.Start() + m.len
+	iter := newOverlappingIter(ac, unsafeBytes(haystack))
+	return func(yield func(*Match) bool) {
+		for m := iter.Next(); m != nil; m = iter.Next() {
+			if !yield(m) {
+				break
 			}
-			if start-1 < len(haystack) {
-				size += len(haystack[start:])
-			}
-			return size
-		},
-		func(match Match) (string, bool) {
-			return replaceWith[match.pattern], true
-		},
-	)
-}
-
-// ReplaceAllWith replaces the matches found in the haystack according with replacement.
-func (r Replacer) ReplaceAllWith(haystack, replacement string) string {
-	return r.replaceAll(
-		haystack,
-		func(matches []Match) int {
-			size, start := 0, 0
-			for _, m := range matches {
-				size += m.Start() - start + len(replacement)
-				start = m.Start() + m.len
-			}
-			if start-1 < len(haystack) {
-				size += len(haystack[start:])
-			}
-			return size
-		},
-		func(match Match) (string, bool) {
-			return replacement, true
-		},
-	)
-}
-
-func (r Replacer) replaceAll(haystack string, measure func(matches []Match) int, f func(match Match) (string, bool)) string {
-	matches := r.finder.FindAll(haystack)
-	if len(matches) == 0 {
-		return haystack
-	}
-
-	str := pool.Get().(strings.Builder)
-	defer func() {
-		str.Reset()
-		pool.Put(str)
-	}()
-
-	// right-size the buffer
-	switch size := measure(matches); size {
-	case 0:
-		return ""
-	case -1:
-		// do nothing
-	default:
-		str.Grow(size)
-	}
-
-	start := 0
-	for _, match := range matches {
-		rw, ok := f(match)
-		if !ok {
-			str.WriteString(haystack[start:])
-			return str.String()
 		}
-		str.WriteString(haystack[start:match.Start()])
-		str.WriteString(rw)
-		start = match.Start() + match.len
 	}
-
-	if start-1 < len(haystack) {
-		str.WriteString(haystack[start:])
-	}
-
-	return str.String()
-}
-
-type Finder interface {
-	FindAll(haystack string) []Match
-	PatternCount() int
 }
 
 // FindAll returns the matches found in the haystack
-func (ac AhoCorasick) FindAll(haystack string) []Match {
+func FindAll[T Text](ac AhoCorasick, haystack T) []Match {
 	iter := newFindIter(ac, unsafeBytes(haystack))
 
 	var matches []Match
@@ -290,6 +173,113 @@ func (ac AhoCorasick) FindAll(haystack string) []Match {
 	}
 
 	return matches
+}
+
+var pool = sync.Pool{
+	New: func() interface{} {
+		return &bytes.Buffer{}
+	},
+}
+
+// ReplaceAllFunc replaces the matches found in the haystack according to the user provided function
+// it gives fine grained control over what is replaced.
+// A user can chose to stop the replacing process early by returning false in the lambda
+// In that case, everything from that point will be kept as the original haystack
+func ReplaceAllFunc[T, U Text](ac AhoCorasick, haystack T, f func(match Match) (U, bool)) T {
+	return replaceAll(ac, haystack, func(_ []Match) int { return -1 }, f)
+}
+
+// ReplaceAll replaces the matches found in the haystack according to the user provided slice `replaceWith`
+// It panics, if `replaceWith` has length different from the patterns that it was built with
+func ReplaceAll[T, U Text](ac AhoCorasick, haystack T, replaceWith []U) T {
+	if len(replaceWith) != ac.PatternCount() {
+		panic("replaceWith needs to have the same length as the pattern count")
+	}
+
+	return replaceAll(
+		ac,
+		haystack,
+		func(matches []Match) int {
+			size, start := 0, 0
+			for _, m := range matches {
+				size += m.Start() - start + len(replaceWith[m.pattern])
+				start = m.Start() + m.len
+			}
+			if start-1 < len(haystack) {
+				size += len(haystack[start:])
+			}
+			return size
+		},
+		func(match Match) (U, bool) {
+			return replaceWith[match.pattern], true
+		},
+	)
+}
+
+// ReplaceAllWith replaces the matches found in the haystack according with replacement.
+func ReplaceAllWith[T, U Text](ac AhoCorasick, haystack T, replacement U) T {
+	return replaceAll(
+		ac,
+		haystack,
+		func(matches []Match) int {
+			size, start := 0, 0
+			for _, m := range matches {
+				size += m.Start() - start + len(replacement)
+				start = m.Start() + m.len
+			}
+			if start-1 < len(haystack) {
+				size += len(haystack[start:])
+			}
+			return size
+		},
+		func(match Match) (U, bool) {
+			return replacement, true
+		},
+	)
+}
+
+func replaceAll[T, U Text](ac AhoCorasick, haystack T, measure func(matches []Match) int, f func(match Match) (U, bool)) T {
+	matches := FindAll(ac, haystack)
+	if len(matches) == 0 {
+		return haystack
+	}
+
+	str := pool.Get().(*bytes.Buffer)
+	defer func() {
+		str.Reset()
+		pool.Put(str)
+	}()
+
+	// right-size the buffer
+	switch size := measure(matches); size {
+	case 0:
+		var zero T
+		return zero
+	case -1:
+		// do nothing
+	default:
+		str.Grow(size)
+	}
+
+	haystackBytes := unsafeBytes(haystack)
+
+	start := 0
+	for _, match := range matches {
+		rw, ok := f(match)
+		if !ok {
+			str.Write(haystackBytes[start:])
+			return unsafeText[T](str.Bytes())
+		}
+		str.Write(haystackBytes[start:match.Start()])
+		str.Write(unsafeBytes(rw))
+		start = match.Start() + match.len
+	}
+
+	if start-1 < len(haystack) {
+		str.Write(haystackBytes[start:])
+	}
+
+	return unsafeText[T](str.Bytes())
 }
 
 // AhoCorasickBuilder defines a set of options applied before the patterns are built
